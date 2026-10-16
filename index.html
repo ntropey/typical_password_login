@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>justsignup - Secure Account Creation</title>
+<style>
+  :root {
+    --green: #2ecc71;
+    --red: #e74c3c;
+    --gray: #999;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f2f2f2;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    transition: font-family 0.5s;
+  }
+  body[data-stage="4"] { font-family: "Comic Sans MS", "Comic Sans", cursive; }
+  body[data-stage="5"] { font-family: "Papyrus", "Comic Sans MS", cursive; }
+
+  .card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    padding: 28px 32px;
+    width: 620px;
+    max-width: 95vw;
+    transition: transform 0.4s;
+  }
+  body[data-stage="5"] .card { transform: rotate(-0.6deg); border: 3px dashed #e91e63; }
+
+  .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  h1 { font-size: 26px; margin: 0; font-weight: 700; }
+  body[data-stage="4"] h1 { color: #e91e63; }
+  .timer {
+    background: var(--red);
+    color: #fff;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-variant-numeric: tabular-nums;
+    font-size: 15px;
+  }
+
+  .layout { display: flex; gap: 24px; }
+  .form { flex: 1; min-width: 0; }
+  .reqs { width: 240px; flex-shrink: 0; }
+
+  input[type=text], input[type=password] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 15px;
+    margin-bottom: 14px;
+    outline: none;
+  }
+  input:focus { border-color: #888; }
+  input.bad { border-color: var(--red); }
+  input.good { border-color: var(--green); }
+
+  .pw-wrap { position: relative; }
+  .eye {
+    position: absolute; right: 10px; top: 11px;
+    background: none; border: 1px solid #2962ff;
+    color: #2962ff; border-radius: 50%;
+    width: 30px; height: 30px; cursor: pointer;
+    font-size: 12px; font-weight: 700;
+  }
+  .typo-note {
+    color: var(--red); font-size: 12px; height: 16px; margin: -8px 0 6px;
+  }
+
+  button.signup {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    border: none;
+    border-radius: 6px;
+    background: #ddd;
+    color: #666;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.3s;
+  }
+  button.signup.ready { background: var(--green); color: #fff; }
+
+  ul { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  li {
+    padding: 3px 0;
+    color: var(--gray);
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+  }
+  li.ok { color: #666; }
+  li .mark { width: 14px; flex-shrink: 0; }
+  li.ok .mark { color: var(--green); }
+  li.bad .mark { color: var(--red); }
+  li.clickable { cursor: pointer; user-select: none; }
+  li.clickable:hover { background: #fff3cd; }
+  li.fresh { animation: pop 0.5s; background: #fff9c4; }
+  @keyframes pop { from { transform: scale(0.8); opacity: 0; } }
+
+  .shakescreen { animation: shake 0.4s; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+  }
+
+  /* modal */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 50;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: #fff; border-radius: 10px;
+    padding: 24px; width: 460px; max-width: 92vw;
+    text-align: center;
+  }
+  .modal h2 { margin: 0 0 6px; font-size: 20px; }
+  .modal p { color: #777; font-size: 14px; margin: 0 0 14px; }
+  canvas { border: 2px solid #333; background: #111; display: block; margin: 0 auto; }
+  .hud { color: #333; font-size: 13px; margin-bottom: 8px; }
+
+  .simon-row { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; }
+  .simon {
+    width: 70px; height: 70px; border: none; border-radius: 8px;
+    cursor: pointer; opacity: 0.45; transition: opacity 0.1s, transform 0.1s;
+  }
+  .simon.lit { opacity: 1; transform: scale(1.08); }
+
+  .captcha-grid {
+    display: grid; grid-template-columns: repeat(3, 70px);
+    gap: 6px; justify-content: center; margin-bottom: 12px;
+  }
+  .tile {
+    width: 70px; height: 70px; font-size: 34px;
+    border: 2px solid #ccc; border-radius: 4px;
+    background: #eef; cursor: pointer;
+  }
+  .tile.sel { border-color: #2962ff; background: #dce8ff; }
+
+  .dial-wrap { margin-bottom: 12px; }
+  .dial-val { font-size: 28px; font-weight: 700; }
+
+  .ok-msg { color: var(--green); font-weight: 700; }
+
+  /* success */
+  #success { background: rgba(46, 204, 113, 0.92); }
+  #success .modal { background: #fff; }
+  .confetti {
+    position: fixed; top: -20px; font-size: 24px;
+    animation: fall linear forwards; z-index: 60;
+    pointer-events: none;
+  }
+  @keyframes fall { to { transform: translateY(110vh) rotate(720deg); } }
+
+  .hidden { display: none !important; }
+  a.reset { font-size: 12px; color: #999; }
+</style>
+</head>
+<body data-stage="1">
+
+<div class="card">
+  <div class="head">
+    <h1>justsignup</h1>
+    <div class="timer" id="timer" title="Time until we add more requirements">01:09</div>
+  </div>
+
+  <div class="layout">
+    <div class="form">
+      <input type="text" id="name" placeholder="Name" autocomplete="off">
+      <div class="pw-wrap">
+        <input type="password" id="pw" placeholder="Password" autocomplete="off">
+        <button class="eye" id="eye" title="Show password">4x</button>
+      </div>
+      <div class="typo-note" id="typoNote"></div>
+      <button class="signup" id="signup">Sign Up</button>
+    </div>
+    <div class="reqs">
+      <ul id="reqList"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- dragon game -->
+<div class="overlay" id="gameOverlay">
+  <div class="modal">
+    <h2>The Password Dragon awakens</h2>
+    <p>Collect 8 green checks. Avoid the red X's. Arrow keys / WASD. 3 lives. Good luck.</p>
+    <div class="hud" id="gameHud"></div>
+    <canvas id="dragon" width="420" height="300"></canvas>
+    <p class="ok-msg hidden" id="gameWin">The dragon is defeated. Requirement satisfied.</p>
+  </div>
+</div>
+
+<!-- puzzles -->
+<div class="overlay" id="puzzleOverlay">
+  <div class="modal">
+    <div id="puzzleSimon">
+      <h2>Repeat the ancient password chant</h2>
+      <p>Watch the sequence, then repeat it by clicking the stones.</p>
+      <div class="simon-row">
+        <button class="simon" style="background:#e74c3c" data-i="0"></button>
+        <button class="simon" style="background:#3498db" data-i="1"></button>
+        <button class="simon" style="background:#f1c40f" data-i="2"></button>
+        <button class="simon" style="background:#2ecc71" data-i="3"></button>
+      </div>
+      <div class="hud" id="simonMsg">Press "Begin chant"</div>
+      <button id="simonStart">Begin chant</button>
+    </div>
+
+    <div id="puzzleCaptcha" class="hidden">
+      <h2>Select all traffic lights</h2>
+      <p>Click every tile with a traffic light. This is required by law.</p>
+      <div class="captcha-grid" id="capGrid"></div>
+      <button id="capVerify">Verify</button>
+      <div class="hud" id="capMsg"></div>
+    </div>
+
+    <div id="puzzleDial" class="hidden">
+      <h2>Set the suffering dial</h2>
+      <p>Drag the dial to exactly 42. The unlabeled ticks are for ambiance.</p>
+      <div class="dial-wrap">
+        <div class="dial-val" id="dialVal">0</div>
+        <input type="range" id="dial" min="0" max="100" value="0" style="width:100%">
+      </div>
+      <div class="hud" id="dialMsg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- success -->
+<div class="overlay" id="success">
+  <div class="modal">
+    <h2>Account created!</h2>
+    <p id="successMsg"></p>
+    <p>Your password has been logged, framed, and hung in our lobby.</p>
+    <a href="#" class="reset" id="resetLink">do it all again</a>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+const pwEl = $("pw"), nameEl = $("name"), listEl = $("reqList");
+
+/* ---------------- state ---------------- */
+let reqs = [];            // {id,label,test,done,stage,clicks,fresh}
+let stage = 1;
+let flags = { fKey:false, shiftUntil:0, mouseRight:false, gameWon:false,
+              simonWon:false, captchaWon:false, dial42:false, konami:false,
+              buttonHits:0, flips:0, flipTarget:13 };
+let respawns = 0; // button dodge attempts allowed
+
+/* ---------------- requirement factory ---------------- */
+function addReq(label, test, opts = {}) {
+  const r = { id: "r" + Math.random().toString(36).slice(2), label, test, done: false, fresh: true, ...opts };
+  reqs.push(r);
+  setTimeout(() => { r.fresh = false; }, 600);
+  return r;
+}
+
+/* ---------------- stage 1: suspiciously reasonable ---------------- */
+addReq("Must be at least 8 characters", pw => pw.length >= 8, { stage: 1 });
+addReq("Must include a number", pw => /\d/.test(pw), { stage: 1 });
+addReq("Must include a lowercase letter", pw => /[a-z]/.test(pw), { stage: 1 });
+addReq("Must include an uppercase letter", pw => /[A-Z]/.test(pw), { stage: 1 });
+addReq("Must include a special character", pw => /[^a-zA-Z0-9]/.test(pw), { stage: 1 });
+
+/* ---------------- stage 2: mild nonsense ---------------- */
+function unlockStage2() {
+  addReq("Must include an emoji", pw => /\p{Extended_Pictographic}/u.test(pw), { stage: 2 });
+  addReq("Must include the current year", pw => pw.includes(String(new Date().getFullYear())), { stage: 2 });
+  addReq("Must include the same number twice in a row", pw => /(\d)\1/.test(pw), { stage: 2 });
+  addReq("Must not contain the letter e", pw => !/e/i.test(pw), { stage: 2 });
+  addReq("Must read the same forwards and backwards", pw => pw.length > 2 && pw === [...pw].reverse().join(""), { stage: 2 });
+  addReq("Must be less than 13 characters long", pw => pw.length < 13, { stage: 2 });
+  stage = 2; document.body.dataset.stage = "2"; notify("Additional requirements unlocked (compliance)");
+}
+
+/* ---------------- stage 3: keyboard & mouse offerings ---------------- */
+let respectsLi = null;
+function unlockStage3() {
+  addReq("Press F to pay respects", () => flags.fKey, { stage: 3 });
+  respectsLi = addReq("Click this requirement (0/5)", () => flags.buttonHits >= 5 || flags.reqClicks >= 5, { stage: 3 });
+  respectsLi.clicks = 0;
+  respectsLi.onClick = () => {
+    respectsLi.clicks++;
+    respectsLi.label = "Click this requirement (" + respectsLi.clicks + "/5)";
+    if (respectsLi.clicks >= 5) flags.reqClicks = 5;
+  };
+  addReq("Hold Shift for 2 full seconds", () => Date.now() < flags.shiftUntil, { stage: 3 });
+  addReq("Your mouse must point right", () => flags.mouseRight, { stage: 3 });
+  addReq("Must defeat the Password Dragon", () => flags.gameWon, { stage: 3 });
+  stage = 3; document.body.dataset.stage = "3";
+  notify("You seem competent. Let's fix that.");
+  setTimeout(openGame, 900);
+}
+
+/* ---------------- stage 4: puzzles ---------------- */
+function unlockStage4() {
+  addReq("Must repeat the ancient password chant", () => flags.simonWon, { stage: 4 });
+  addReq("Select all traffic lights (required by law)", () => flags.captchaWon, { stage: 4 });
+  addReq("Set the suffering dial to 42", () => flags.dial42, { stage: 4 });
+  stage = 4; document.body.dataset.stage = "4";
+  notify("Verification complete. Here is more verification.");
+  setTimeout(openPuzzles, 900);
+}
+
+/* ---------------- stage 5: hostile finale ---------------- */
+let flipReq = null, flipTimer = null;
+function unlockStage5() {
+  addReq("Must include how many minutes past the hour it is",
+    pw => pw.includes(String(new Date().getMinutes())), { stage: 5 });
+  flipReq = addReq("Must be exactly 13 characters", pw => pw.length === flags.flipTarget, { stage: 5 });
+  addReq("Must include the Konami code (\u2191\u2191\u2193\u2193\u2190\u2192\u2190\u2192BA)",
+    () => flags.konami, { stage: 5 });
+  const feelings = addReq("The Sign Up button has feelings (click it 3 times, gently)",
+    () => flags.buttonHits2 >= 3, { stage: 5 });
+  stage = 5; document.body.dataset.stage = "5";
+  notify("Final requirements. Probably. We stopped writing it down.");
+  enableButtonDodge(feelings);
+}
+
+/* timer-driven bonus requirements */
+const chaosPool = [
+  ["Must include a letter from your name",
+    pw => (nameEl.value.trim()[0] || "z").toLowerCase() && pw.toLowerCase().includes((nameEl.value.trim()[0] || "z").toLowerCase())],
+  ["Must include the official taco \ud83c\udf2e", pw => pw.includes("\ud83c\udf2e")],
+  ["Must include two digits in ascending order",
+    pw => /\d/.test(pw) && [...pw].some((c, i) => /\d/.test(c) && pw[i + 1] === String(+c + 1))],
+  ["Must include the square root of 64 (as a digit)", pw => pw.includes("8")],
+  ["Must include the letter z (a rare, premium letter)", pw => /z/i.test(pw)],
+  ["Must include 42 (it is the answer)", pw => pw.includes("42")],
+];
+let chaosIdx = 0;
+function addChaosReq() {
+  if (chaosIdx >= chaosPool.length) return;
+  const [label, test] = chaosPool[chaosIdx++];
+  addReq(label, test, { stage: 5 });
+  notify("Timer expired. New requirement added, as a treat.");
+  document.querySelector(".card").classList.add("shakescreen");
+  setTimeout(() => document.querySelector(".card").classList.remove("shakescreen"), 450);
+}
+
+/* ---------------- rendering ---------------- */
+function render() {
+  const frag = document.createDocumentFragment();
+  for (const r of reqs) {
+    const ok = r.done;
+    const li = document.createElement("li");
+    li.className = (ok ? "ok" : "bad") + (r.fresh ? " fresh" : "") + (r.onClick ? " clickable" : "");
+    const mark = document.createElement("span");
+    mark.className = "mark";
+    mark.textContent = ok ? "\u2713" : "\u2717";
+    const txt = document.createElement("span");
+    txt.textContent = r.label;
+    li.append(mark, txt);
+    if (r.onClick) li.addEventListener("click", r.onClick);
+    frag.appendChild(li);
+  }
+  listEl.replaceChildren(frag);
+}
+
+let notifyEl = null;
+function notify(text) {
+  if (!notifyEl) {
+    notifyEl = document.createElement("li");
+    notifyEl.style.cssText = "color:#e67e22;font-weight:700;padding-top:8px";
+    listEl.appendChild(notifyEl);
+  }
+  notifyEl.textContent = text;
+  setTimeout(() => { if (notifyEl) notifyEl.textContent = ""; }, 4000);
+}
+
+/* ---------------- progression ---------------- */
+function checkProgress() {
+  const pw = pwEl.value;
+  // once a stage is cleared its requirements are locked green forever (we are "done talking about it")
+  for (const r of reqs) {
+    if (r.stage < stage) r.done = true;
+    else r.done = !!r.test(pw);
+  }
+
+  // silly flip logic on the "exactly N characters" requirement
+  if (flipReq && flipReq.done && flags.flips < 3) {
+    flags.flips++;
+    const targets = [12, 14, 13];
+    flags.flipTarget = targets[flags.flips - 1];
+    const labels = [
+      "Wait, 12. Definitely 12.",
+      "Ugh. 14. Final answer.",
+      "I changed my mind. 13 again. Forever."
+    ];
+    flipReq.label = "Must be exactly " + flags.flipTarget + " characters (" + labels[flags.flips - 1] + ")";
+    document.querySelector(".card").classList.add("shakescreen");
+    setTimeout(() => document.querySelector(".card").classList.remove("shakescreen"), 450);
+  }
+
+  pwEl.classList.toggle("bad", !pw);
+  pwEl.classList.toggle("good", pw.length > 0);
+
+  const stageReqs = reqs.filter(r => r.stage === stage);
+  const allDone = stageReqs.length > 0 && stageReqs.every(r => r.done);
+  if (allDone) {
+    if (stage === 1) unlockStage2();
+    else if (stage === 2) unlockStage3();
+    else if (stage === 3) unlockStage4();
+    else if (stage === 4) unlockStage5();
+    else if (stage === 5) win();
+  }
+  render();
+}
+
+/* ---------------- input & keyboard plumbing ---------------- */
+pwEl.addEventListener("input", checkProgress);
+nameEl.addEventListener("input", checkProgress);
+
+document.addEventListener("keydown", e => {
+  if (e.key === "f" || e.key === "F") flags.fKey = true;
+  if (e.key === "Shift") {
+    if (!flags.shiftStart) flags.shiftStart = Date.now();
+  }
+  konamiTrack(e.key);
+});
+document.addEventListener("keyup", e => {
+  if (e.key === "Shift" && flags.shiftStart && Date.now() - flags.shiftStart >= 2000) {
+    flags.shiftUntil = Date.now() + 4000; // sticky for a bit, we are generous
+  }
+  if (e.key === "Shift") flags.shiftStart = 0;
+});
+
+let lastMove = 0;
+document.addEventListener("mousemove", e => {
+  if (e.clientX > lastMove && e.clientX - lastMove > 3) flags.mouseRight = true;
+  lastMove = e.clientX;
+});
+
+const KONAMI = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
+let kBuf = [];
+function konamiTrack(key) {
+  kBuf.push(key);
+  if (kBuf.length > KONAMI.length) kBuf.shift();
+  if (kBuf.join(",").toLowerCase() === KONAMI.join(",").toLowerCase()) flags.konami = true;
+}
+
+/* eye button: toggles visibility, and pretends the password is "4x speed secure" */
+$("eye").addEventListener("click", () => {
+  pwEl.type = pwEl.type === "password" ? "text" : "password";
+});
+
+/* ---------------- autocorrect sabotage ---------------- */
+setInterval(() => {
+  const pw = pwEl.value;
+  if (pw.length < 4 || document.activeElement === pwEl) return;
+  const i = Math.floor(Math.random() * pw.length);
+  const chars = [...pw];
+  if (Math.random() < 0.5) chars[i] = chars[i].toUpperCase();
+  else if (i < chars.length - 1) [chars[i], chars[i + 1]] = [chars[i + 1], chars[i]];
+  pwEl.value = chars.join("");
+  $("typoNote").textContent = "We fixed a typo for you :)";
+  setTimeout(() => { $("typoNote").textContent = ""; }, 2500);
+  checkProgress();
+}, 9000);
+
+/* ---------------- countdown that punishes you ---------------- */
+let tLeft = 69;
+setInterval(() => {
+  tLeft--;
+  if (tLeft <= 0) {
+    tLeft = 40 + Math.floor(Math.random() * 40);
+    if (reqs.length) addChaosReq();
+  }
+  const m = String(Math.floor(tLeft / 60)).padStart(2, "0");
+  const s = String(tLeft % 60).padStart(2, "0");
+  $("timer").textContent = m + ":" + s;
+}, 1000);
+
+/* ---------------- sign up button: it runs away ---------------- */
+let dodgeEnabled = false, tiredUntil = 0;
+function enableButtonDodge() {
+  dodgeEnabled = true;
+  flags.buttonHits2 = 0;
+  const btn = $("signup");
+  btn.addEventListener("mouseenter", () => {
+    if (!dodgeEnabled || Date.now() < tiredUntil) return;
+    const x = (Math.random() - 0.5) * 260;
+    const y = (Math.random() - 0.5) * 90;
+    btn.style.transform = "translate(" + x + "px," + y + "px) rotate(" + (Math.random() * 10 - 5) + "deg)";
+    tiredUntil = Date.now() + 6000;
+    setTimeout(() => { tiredUntil = Date.now() + 2000; }, 4000); // button gets tired, rests
+    btn.textContent = "no";
+  });
+}
+$("signup").addEventListener("click", e => {
+  e.preventDefault();
+  const all = reqs.length > 10 && reqs.every(r => r.done);
+  if (!all) {
+    if (dodgeEnabled) {
+      flags.buttonHits2++;
+      $("signup").textContent = flags.buttonHits2 >= 3 ? "ok fine" : "ow (" + flags.buttonHits2 + "/3)";
+    }
+    document.querySelector(".card").classList.add("shakescreen");
+    setTimeout(() => document.querySelector(".card").classList.remove("shakescreen"), 450);
+    checkProgress();
+  } else {
+    win();
+  }
+});
+
+/* ---------------- dragon mini-game ---------------- */
+const cv = $("dragon"), cx = cv.getContext("2d");
+let g = null;
+function openGame() { $("gameOverlay").classList.add("show"); startGame(); }
+
+function startGame() {
+  g = { p: { x: 200, y: 250, w: 18, h: 18 }, lives: 3, score: 0,
+        items: [], keys: {}, over: false, spawnAt: 0, msg: "" };
+  $("gameWin").classList.add("hidden");
+  requestAnimationFrame(gameLoop);
+}
+
+document.addEventListener("keydown", e => { if (g) g.keys[e.key.toLowerCase()] = true; });
+document.addEventListener("keyup", e => { if (g) g.keys[e.key.toLowerCase()] = false; });
+
+function gameLoop() {
+  if (!g) return;
+  const now = performance.now();
+  const k = g.keys;
+  const sp = 3.4;
+  if (k["arrowleft"] || k["a"]) g.p.x -= sp;
+  if (k["arrowright"] || k["d"]) g.p.x += sp;
+  if (k["arrowup"] || k["w"]) g.p.y -= sp;
+  if (k["arrowdown"] || k["s"]) g.p.y += sp;
+  g.p.x = Math.max(0, Math.min(cv.width - g.p.w, g.p.x));
+  g.p.y = Math.max(0, Math.min(cv.height - g.p.h, g.p.y));
+
+  if (now > g.spawnAt && g.items.length < 10) {
+    g.spawnAt = now + 700;
+    const bad = Math.random() < 0.4;
+    g.items.push({
+      x: Math.random() * (cv.width - 20), y: -20,
+      vy: 1 + Math.random() * 2, bad,
+      chase: bad && Math.random() < 0.5
+    });
+  }
+
+  cx.clearRect(0, 0, cv.width, cv.height);
+  cx.fillStyle = "#fff";
+  cx.fillRect(g.p.x, g.p.y, g.p.w, g.p.h);
+
+  for (const it of g.items) {
+    it.y += it.vy;
+    if (it.chase) it.x += Math.sign(g.p.x - it.x) * 1.2;
+    cx.font = "20px serif";
+    cx.fillText(it.bad ? "\u2717" : "\u2713", it.x, it.y);
+    if (Math.abs(it.x - g.p.x) < 18 && Math.abs(it.y - g.p.y) < 18) {
+      it.dead = true;
+      if (it.bad) { g.lives--; g.msg = "Ouch!"; }
+      else { g.score++; g.msg = ""; }
+    }
+    if (it.y > cv.height) it.dead = true;
+  }
+  g.items = g.items.filter(i => !i.dead);
+
+  $("gameHud").textContent = "Checks: " + g.score + "/8   Lives: " + "\u2665".repeat(Math.max(0, g.lives)) + "   " + g.msg;
+
+  if (g.lives <= 0 && !g.over) {
+    g.msg = "The dragon wins. Respawning... requirements remain.";
+    setTimeout(() => { if (g) startGame(); }, 1500);
+    g.over = true;
+  }
+  if (g.score >= 8 && !g.over) {
+    g.over = true;
+    flags.gameWon = true;
+    $("gameWin").classList.remove("hidden");
+    $("gameHud").textContent = "Victory!";
+    setTimeout(() => { $("gameOverlay").classList.remove("show"); g = null; checkProgress(); }, 2200);
+    return;
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+/* ---------------- puzzles ---------------- */
+function openPuzzles() {
+  $("puzzleOverlay").classList.add("show");
+  $("puzzleSimon").classList.remove("hidden");
+  $("puzzleCaptcha").classList.add("hidden");
+  $("puzzleDial").classList.add("hidden");
+}
+
+/* simon */
+let simonSeq = [], simonPos = 0, simonAccepting = false;
+$("simonStart").addEventListener("click", () => {
+  simonSeq = [];
+  for (let i = 0; i < 5; i++) simonSeq.push(Math.floor(Math.random() * 4));
+  $("simonMsg").textContent = "Watch...";
+  playSimon(0);
+});
+function playSimon(i) {
+  if (i >= simonSeq.length) {
+    simonAccepting = true; simonPos = 0;
+    $("simonMsg").textContent = "Your turn.";
+    return;
+  }
+  const btn = document.querySelector('.simon[data-i="' + simonSeq[i] + '"]');
+  btn.classList.add("lit");
+  setTimeout(() => { btn.classList.remove("lit"); setTimeout(() => playSimon(i + 1), 250); }, 550);
+}
+document.querySelectorAll(".simon").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (!simonAccepting) return;
+    const i = +btn.dataset.i;
+    btn.classList.add("lit");
+    setTimeout(() => btn.classList.remove("lit"), 150);
+    if (i === simonSeq[simonPos]) {
+      simonPos++;
+      if (simonPos >= simonSeq.length) {
+        simonAccepting = false;
+        flags.simonWon = true;
+        $("simonMsg").textContent = "The chant is accepted.";
+        setTimeout(() => nextPuzzle("captcha"), 900);
+      }
+    } else {
+      simonAccepting = false;
+      $("simonMsg").textContent = "The ancestors are displeased. Try again.";
+    }
+  });
+});
+
+/* captcha */
+let capLights = [];
+function buildCaptcha() {
+  const grid = $("capGrid");
+  grid.replaceChildren();
+  capLights = [];
+  const decoys = ["\ud83c\udf33", "\ud83c\udf54", "\ud83d\udc15", "\ud83c\udf1e", "\ud83d\ude80", "\ud83e\uddca"];
+  const slots = [0, 4, 8].map(i => i); // fixed positions, feels official
+  for (let i = 0; i < 9; i++) {
+    const b = document.createElement("button");
+    b.className = "tile";
+    if (slots.includes(i)) { b.textContent = "\ud83d\udea6"; capLights.push(b); }
+    else b.textContent = decoys[Math.floor(Math.random() * decoys.length)];
+    b.addEventListener("click", () => b.classList.toggle("sel"));
+    grid.appendChild(b);
+  }
+  $("capMsg").textContent = "";
+}
+$("capVerify").addEventListener("click", () => {
+  const tiles = [...document.querySelectorAll(".tile")];
+  const selected = tiles.filter(t => t.classList.contains("sel"));
+  const okSel = selected.length === capLights.length && selected.every(t => capLights.includes(t));
+  if (okSel) {
+    flags.captchaWon = true;
+    $("capMsg").textContent = "Verified. You are definitely human-ish.";
+    setTimeout(() => nextPuzzle("dial"), 900);
+  } else {
+    $("capMsg").textContent = "Wrong. Please select every traffic light AND ONLY the traffic lights.";
+    selected.forEach(t => t.classList.remove("sel"));
+  }
+});
+
+/* dial */
+$("dial").addEventListener("input", e => {
+  const v = +e.target.value;
+  $("dialVal").textContent = v;
+  const diff = Math.abs(v - 42);
+  if (diff === 0) {
+    flags.dial42 = true;
+    $("dialMsg").textContent = "YES. 42. Submit yourself.";
+    setTimeout(() => { $("puzzleOverlay").classList.remove("show"); checkProgress(); }, 1000);
+  } else if (diff <= 2) $("dialMsg").textContent = "So close it hurts.";
+  else if (diff <= 10) $("dialMsg").textContent = "Warmer.";
+  else $("dialMsg").textContent = "The dial judges you.";
+});
+
+function nextPuzzle(which) {
+  $("puzzleSimon").classList.add("hidden");
+  $("puzzleCaptcha").classList.add("hidden");
+  $("puzzleDial").classList.add("hidden");
+  if (which === "captcha") { $("puzzleCaptcha").classList.remove("hidden"); buildCaptcha(); }
+  if (which === "dial") { $("puzzleDial").classList.remove("hidden"); $("dial").value = 0; $("dialVal").textContent = "0"; }
+}
+
+/* ---------------- win ---------------- */
+function win() {
+  $("successMsg").textContent = "Welcome, " + (nameEl.value.trim() || "undefined") + ". You now have an account. Probably.";
+  $("success").classList.add("show");
+  const emo = ["\u2705", "\ud83c\udf89", "\ud83d\udca9", "\ud83d\udd11", "\ud83e\udd73"];
+  for (let i = 0; i < 40; i++) {
+    const s = document.createElement("span");
+    s.className = "confetti";
+    s.textContent = emo[Math.floor(Math.random() * emo.length)];
+    s.style.left = Math.random() * 100 + "vw";
+    s.style.animationDuration = 2 + Math.random() * 3 + "s";
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 6000);
+  }
+}
+$("resetLink").addEventListener("click", e => { e.preventDefault(); location.reload(); });
+
+/* ---------------- go ---------------- */
+checkProgress();
+</script>
+</body>
+</html>
