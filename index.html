@@ -54,7 +54,34 @@
 
   .layout { display: flex; gap: 24px; }
   .form { flex: 1; min-width: 0; }
-  .reqs { width: 240px; flex-shrink: 0; }
+  .reqs {
+    width: 240px; flex-shrink: 0;
+    max-height: 340px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    padding: 6px 8px;
+    background: #fafafa;
+    border: 1px solid #e6e6e6;
+    border-radius: 6px;
+    align-self: flex-start;
+  }
+  .reqs.scrollable {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 20px), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 20px), transparent 100%);
+  }
+  .reqs-head {
+    position: sticky; top: -6px; z-index: 2;
+    display: flex; justify-content: space-between; gap: 6px;
+    background: #fafafa;
+    padding: 6px 0 5px;
+    margin-bottom: 2px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #999;
+    border-bottom: 1px solid #eee;
+  }
+  .reqs-head .more { color: #e67e22; }
 
   input[type=text], input[type=password] {
     width: 100%;
@@ -192,7 +219,8 @@
       <div class="typo-note" id="typoNote"></div>
       <button class="signup" id="signup">Sign Up</button>
     </div>
-    <div class="reqs">
+    <div class="reqs" id="reqBox">
+      <div class="reqs-head"><span>Requirements</span><span><span id="reqCount">5</span> <span class="more" id="moreHint"></span></span></div>
       <ul id="reqList"></ul>
     </div>
   </div>
@@ -270,9 +298,11 @@ let flags = { fKey:false, shiftUntil:0, mouseRight:false, gameWon:false,
 let respawns = 0; // button dodge attempts allowed
 
 /* ---------------- requirement factory ---------------- */
+let pendingScroll = false;
 function addReq(label, test, opts = {}) {
   const r = { id: "r" + Math.random().toString(36).slice(2), label, test, done: false, fresh: true, ...opts };
   reqs.push(r);
+  pendingScroll = true;
   setTimeout(() => { r.fresh = false; }, 600);
   return r;
 }
@@ -339,7 +369,7 @@ function unlockStage5() {
   enableButtonDodge(feelings);
 }
 
-/* timer-driven bonus requirements */
+/* timer-driven bonus requirements: continuous, escalating, never ends */
 const chaosPool = [
   ["Must include a letter from your name",
     pw => (nameEl.value.trim()[0] || "z").toLowerCase() && pw.toLowerCase().includes((nameEl.value.trim()[0] || "z").toLowerCase())],
@@ -349,15 +379,56 @@ const chaosPool = [
   ["Must include the square root of 64 (as a digit)", pw => pw.includes("8")],
   ["Must include the letter z (a rare, premium letter)", pw => /z/i.test(pw)],
   ["Must include 42 (it is the answer)", pw => pw.includes("42")],
+  ["Must include a vowel from your name",
+    pw => (nameEl.value.trim().match(/[aeiouy]/gi) || ["a"]).some(ch => pw.toLowerCase().includes(ch.toLowerCase()))],
+  ["Must include the ASCII code of your first initial",
+    pw => pw.includes(String((nameEl.value.trim()[0] || "a").toLowerCase().charCodeAt(0)))],
+  ["Caps Lock must be pressed once (gently)", () => flags.capsUsed],
+  ["Must press Tab exactly once (we have sensors)", () => flags.tabUsed],
+  ["Must scroll this list all the way down", () => flags.scrolledToEnd],
+  ["Must leave the page and come back (we get lonely)", () => flags.blurred],
+  ["Must include a colour spelled the American way", pw => /colou?r/i.test(pw)],
+  ["Must include a dictionary word (substring counts)",
+    pw => /cat|dog|sun|sky|box|egg|jam|cow|pig|fox/i.test(pw)],
+  ["Must include today's moon phase (0-7)",
+    pw => { const age = (((Date.now() / 86400000) - 2451550.2) % 29.530588853 + 29.530588853) % 29.530588853;
+            return pw.includes(String(Math.floor(age / 29.530588853 * 8))); }],
+  ["Must include the number of requirements on this list",
+    pw => pw.includes(String(reqs.length))],
+  ["Must include a symbol that is not on your keyboard",
+    pw => /[\u2020\u2021\u00b6\u00a7\u00ab\u00bb\u00b1\u00f7\u00d7]/.test(pw)],
+  ["Must have been scrolled within the last 3 seconds",
+    () => Date.now() - (flags.lastScroll || 0) < 3000],
 ];
-let chaosIdx = 0;
+const chaosMods = [
+  "(again, but with paperwork)",
+  "(the council has reviewed it)",
+  "(as foretold in the terms of service)",
+  "(do not read this one aloud)",
+  "(legally binding on the moon)",
+  "(we have run out of paper)",
+  "(it knows when you hesitate)",
+  "(compliance is optional, your account is not)",
+  "(signed in triplicate)",
+  "(now with 40% more requirement)",
+  "(the requirement has begun observing you)",
+  "(final final v2 REAL final)",
+];
+let chaosIdx = 0, chaosLap = 0;
+function nextChaosEntry() {
+  if (chaosIdx < chaosPool.length) return chaosPool[chaosIdx++];
+  const [label, test] = chaosPool[(chaosIdx++ - chaosPool.length) % chaosPool.length];
+  const mod = chaosMods[chaosLap % chaosMods.length];
+  chaosLap++;
+  return [label + " " + mod + " [round " + (Math.floor(chaosLap / chaosMods.length) + 1) + "]", test];
+}
 function addChaosReq() {
-  if (chaosIdx >= chaosPool.length) return;
-  const [label, test] = chaosPool[chaosIdx++];
+  const [label, test] = nextChaosEntry();
   addReq(label, test, { stage: 5 });
   notify("Timer expired. New requirement added, as a treat.");
   document.querySelector(".card").classList.add("shakescreen");
   setTimeout(() => document.querySelector(".card").classList.remove("shakescreen"), 450);
+  checkProgress(); // show it now, not on next keystroke
 }
 
 /* ---------------- rendering ---------------- */
@@ -377,6 +448,15 @@ function render() {
     frag.appendChild(li);
   }
   listEl.replaceChildren(frag);
+  if (notifyEl && notifyEl.textContent) listEl.appendChild(notifyEl);
+  $("reqCount").textContent = reqs.length;
+  const box = $("reqBox");
+  box.classList.toggle("scrollable", box.scrollHeight > box.clientHeight + 4);
+  $("moreHint").textContent = box.classList.contains("scrollable") ? "newest \u2193" : "";
+  if (pendingScroll) {
+    pendingScroll = false;
+    box.scrollTop = box.scrollHeight;
+  }
 }
 
 let notifyEl = null;
@@ -435,6 +515,8 @@ nameEl.addEventListener("input", checkProgress);
 
 document.addEventListener("keydown", e => {
   if (e.key === "f" || e.key === "F") flags.fKey = true;
+  if (e.key === "CapsLock" || (e.getModifierState && e.getModifierState("CapsLock"))) flags.capsUsed = true;
+  if (e.key === "Tab") flags.tabUsed = true;
   if (e.key === "Shift") {
     if (!flags.shiftStart) flags.shiftStart = Date.now();
   }
@@ -451,6 +533,13 @@ let lastMove = 0;
 document.addEventListener("mousemove", e => {
   if (e.clientX > lastMove && e.clientX - lastMove > 3) flags.mouseRight = true;
   lastMove = e.clientX;
+});
+
+window.addEventListener("blur", () => { flags.blurred = true; });
+$("reqBox").addEventListener("scroll", () => {
+  flags.lastScroll = Date.now();
+  const box = $("reqBox");
+  flags.scrolledToEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 8;
 });
 
 const KONAMI = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
@@ -485,7 +574,9 @@ let tLeft = 69;
 setInterval(() => {
   tLeft--;
   if (tLeft <= 0) {
-    tLeft = 40 + Math.floor(Math.random() * 40);
+    // each new requirement shrinks the next window: chaos accelerates
+    const pace = Math.max(12, 44 - chaosIdx * 2);
+    tLeft = pace + Math.floor(Math.random() * pace);
     if (reqs.length) addChaosReq();
   }
   const m = String(Math.floor(tLeft / 60)).padStart(2, "0");
